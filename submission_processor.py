@@ -777,11 +777,12 @@ class Submission_Processor (threading.Thread):
         
         # now create the key file
         run_key = library_obj.get_run_key()
-#    ,,,,taxonomic_domain,,project_title,project_description,dataset_description,environmental_source_id
         domain  = library_obj.get_domain()
-        project_title = ''
-        project_description = ''
-        dataset_description = ''
+        region  = submission_detail.region
+        project_title = project.name
+        project_description = project.description[0:255]
+        dataset_description = "Dataset description test" 
+        minLength = 50
         environmental_source_id = 120
         
         metadata_hash = {"key" : run_key, "direction" : library_obj.get_direction(),
@@ -795,24 +796,50 @@ class Submission_Processor (threading.Thread):
         self.write_metadatata_file(metadata_file_name, metadata_hash)
         
         # create the param file
-        param_file_name = processing_dir + "params.prm"
-        self.create_params_file(param_file_name, submission.user, run_key, project.description[0:255], "Dataset description test", project.name)
+#        param_file_name = processing_dir + "params.prm"
+        param_file_name = processing_dir + "parameters.txt"
+        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength)
         
         # now send the files on up
         vamps_status_record_id = self.upload_to_vamps(submission_detail, processing_dir + Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX, primer_file_name, metadata_file_name, param_file_name)
         return vamps_status_record_id
     
     # check with Andy on what he wants for this
-    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title):
+    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title, domain, region, minLength):
         param_file_name
         params_file = open(param_file_name, 'w')
+        param_text = """# comments must have a hash on the first line
+# blank lines are okay.
+\n
+# key, value pairs separated by '=' spaces okay
+# remember that uploads can be multiple projects with multiple datasets
+# no other '=' signs allowed
+"""
+        params_file.write(param_text)
         params_file.write("username=%s\n" % (vamps_user))
         params_file.write("time=%s\n" % ('daytime'))
         params_file.write("platform=%s\n" % ('454'))  # need to get this somewhere
-        params_file.write("%s:description=%s\n" % (run_key,dataset_description))
-        params_file.write("env_source=%s\n" % ('marine'))  # neeed to get this from somewhere
-        params_file.write("project_description=%s\n" % (project_description))
-        params_file.write("project_title=%s\n" % (project_title))
+        params_file.write("minLength=%s\n" % (minLength))  # need to get this somewhere
+        param_text ="# required - but leave empty for no limit\n"
+        params_file.write(param_text)
+        params_file.write("maxLength=%s\n" % (''))  # need to get this somewhere
+        params_file.write("requireDistal=%s\n" % ('1'))  # need to get this somewhere
+        param_text = "\n# these seqs are trimmed or raw?\n"
+        params_file.write(param_text)
+        params_file.write("uploadType=%s\n" % ('raw'))  # need to get this somewhere
+        param_text = "\n# for now this will be fasta\n# but in the future: fastq, sff, compressess and so on\n"
+        params_file.write(param_text)
+        params_file.write("sequence_file_type=%s\n" % ('fasta_clean'))  # need to get this somewhere
+        params_file.write("tax_classifier=%s\n" % ('rdp'))  # need to get this somewhere
+        param_text = """\n# GAST
+# for database selection
+# These are also in the metadata file on each line
+# but these are used exclusively for GASTing mobedac
+"""
+        params_file.write(param_text)
+        params_file.write("dna_region=%s\n" % (region))  # need to get this somewhere
+        params_file.write("domain=%s\n" % (domain))  # need to get this somewhere
+
         params_file.flush()
         params_file.close()
 
