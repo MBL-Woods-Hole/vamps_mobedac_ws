@@ -772,7 +772,7 @@ class Submission_Processor (threading.Thread):
         # now create the primer file
         # first get the owning Library
         primers = library_obj.get_primers()
-        primer_file_name = processing_dir + "primers.txt"
+        primer_file_name = processing_dir + "primers.csv"
         self.create_primer_file(primers, primer_file_name)
         
         # now create the key file
@@ -820,10 +820,13 @@ class Submission_Processor (threading.Thread):
         primer_file = open(primer_file_name, 'w')
         p_index = 0
         for primer in primer_array:
+            print "PPP: primer = " % primer
             # force in some defaults...maybe mobedac won't have them
             primer["name"] = primer.get("name", "p_" + str(p_index))
 #            primer["location"] = primer.get("location", "p_" + str(p_index))
-            primer_line = Template("$name\t$direction\t$sequence\t$regions\t$location\n").substitute(primer)
+#            old:
+#            primer_line = Template("$name\t$direction\t$sequence\t$regions\t$location\n").substitute(primer)
+            primer_line = Template("$name,$direction,$sequence\n").substitute(primer)
 #            print "PPP primer_line = " % (primer_line)
             primer_file.write(primer_line)
             p_index += 1
