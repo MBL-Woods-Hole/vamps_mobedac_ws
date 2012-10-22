@@ -636,7 +636,7 @@ class Submission_Processor (threading.Thread):
             # Tobi is putting the file type into the HTTP header
             response_headers = remote_file_handle.info().headers
             # assume this
-            file_type = "fasta"
+#            file_type = "fasta"
             valid_file_types = ["fasta", "fastq", "sff"]
             for h in response_headers:
                 hlower = h.lower()
