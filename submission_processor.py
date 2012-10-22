@@ -647,6 +647,25 @@ class Submission_Processor (threading.Thread):
             # if we didn't find a type we know then default it
             if file_type not in valid_file_types:
                 file_type = "fasta"
+            "TODO: remove hardcoded value, send with params"
+            compression = "gzip"
+            """
+            if self.runobj.compressed:
+            import gzip
+            try:
+                logger.info( "illumina_filtering: opening compressed file: "+in_filepath)
+                fp = gzip.open( in_filepath )
+            except:
+                logger.info( "illumina_filtering: opening uncompressed file: "+in_filepath)
+                fp = open( in_filepath )            
+            
+            if (compression == "gzip"):
+                import gzip
+                try:
+ 
+                               
+            """
+
             # now write out the raw file
             raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
             # this could be an sff file? which would be binary
@@ -660,6 +679,7 @@ class Submission_Processor (threading.Thread):
                 else:
                     break
             self.log_debug("successfully downloaded seq file with url: " + full_seq_file_download_url)
+            "TODO: add file_name and type and compressed into sequcence set parcing"
             return file_type
         except:
             self.log_to_submission_detail(detail, "Error during retrieving of sequence data from MoBEDAC")
@@ -682,9 +702,24 @@ class Submission_Processor (threading.Thread):
         raw_file_handle = None
         clean_seq_file_handle = None
         quality_file_handle = None
+        "TODO: remove hardcoded value, send with params"
+        compression = "gzip"
+        """
+        if self.runobj.compressed:
+        import gzip
+        try:
+            logger.info( "illumina_filtering: opening compressed file: "+in_filepath)
+            fp = gzip.open( in_filepath )
+        except:
+            logger.info( "illumina_filtering: opening uncompressed file: "+in_filepath)
+            fp = open( in_filepath )            
+        
+        """
         try:
             # open the raw file
             raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
+            if (compression == "gzip"):
+                ungzip_file(raw_seq_file_name)    
             binary_flag = "b" if file_type == "sff" else ""
             raw_file_handle = open(raw_seq_file_name, "r" + binary_flag)
             # now open/create the clean file
@@ -724,6 +759,16 @@ class Submission_Processor (threading.Thread):
                 clean_seq_file_handle.close()
             if quality_file_handle != None:
                 quality_file_handle.close()
+                
+    def ungzip_file(raw_seq_file_name):
+        import gzip
+        f_gz = gzip.open(raw_seq_file_name, 'rb')
+        file_content = f_gz.read()
+        f_gz.close()
+        temp_file_name = raw_seq_file_name + ".tmp"
+        f = open(temp_file_name, 'w')
+        f.write(file_content)        
+        f.close()
     
     # upload each detail object (a library=sequence file) at a time to VAMPS
     def vamps_upload(self, submission, submissiondetail_array):
