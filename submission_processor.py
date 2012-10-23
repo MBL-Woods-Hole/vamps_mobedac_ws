@@ -733,6 +733,7 @@ class Submission_Processor (threading.Thread):
                 quality_file_handle = open(file_full_name, 'w')
 #                quality_file_handle = open(file_type + ".qual", 'w')
             # use the sff record id rather than trying to parse it with fasta/q
+                print "QQQ1: generate_quality_file\n"       
             use_seq_record_id = (file_type == 'sff') 
             self.log_debug("attempting to convert sequence file: " + raw_seq_file_name)
             self.log_debug("attempting to convert type: " + file_type)
@@ -873,39 +874,63 @@ class Submission_Processor (threading.Thread):
     
     # check with Andy on what he wants for this
     def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title, domain, region, minLength):
+        import datetime
+#        t = datetime.time(1, 2, 3)
+#        print 't :', t
+        date_now = datetime.date.today()
         param_file_name
         params_file = open(param_file_name, 'w')
         param_text = """# comments must have a hash on the first line
 # blank lines are okay.
-\n
+# convention: two words separated by '_' so: require_distal not: requireDistal
+
 # key, value pairs separated by '=' spaces okay
 # remember that uploads can be multiple projects with multiple datasets
 # no other '=' signs allowed
 """
         params_file.write(param_text)
+        
+        param_text ="\n# REQUIRED: username\n"
+        params_file.write(param_text)        
         params_file.write("username=%s\n" % (vamps_user))
+        
+        param_text ="\n# keep this format for date:  yyyy-mm-dd\n"
+        params_file.write(param_text)               
         params_file.write("time=%s\n" % ('daytime'))
-        params_file.write("platform=%s\n" % ('454'))  # need to get this somewhere
-        params_file.write("minLength=%s\n" % (minLength))  # need to get this somewhere
-        param_text ="# required - but leave empty for no limit\n"
+        params_file.write("date=%s\n" % (date_now))
+        
+        param_text ="""\n# this is imprtant for the style of read_id during validation
+# REQUIRED: platform (454, illumina, ion_torrent)
+"""
+        params_file.write(param_text)                       
+        params_file.write("platform=%s\n\n" % ('454'))  # need to get this somewhere
+        
+        params_file.write("min_length=%s\n" % (minLength))  # need to get this somewhere
+        param_text ="\n# required - but leave empty for no limit\n"
         params_file.write(param_text)
-        params_file.write("maxLength=%s\n" % (''))  # need to get this somewhere
-        params_file.write("requireDistal=%s\n" % ('1'))  # need to get this somewhere
-        param_text = "\n# these seqs are trimmed or raw?\n"
+        params_file.write("max_length=%s\n" % (''))  # need to get this somewhere
+        params_file.write("require_distal=%s\n" % ('1'))  # need to get this somewhere
+        param_text = "\n# these seqs are trimmed or raw?\n# for now all sequences are 'raw'\n"
         params_file.write(param_text)
-        params_file.write("uploadType=%s\n" % ('raw'))  # need to get this somewhere
-        param_text = "\n# for now this will be fasta\n# but in the future: fastq, sff, compressess and so on\n"
+        params_file.write("upload_type=%s\n" % ('raw'))  # need to get this somewhere
+        param_text = "\n# SEQUENCE FILE: (fasta, fastq, sff)\n# REQUIRED\n"
         params_file.write(param_text)
-        params_file.write("sequence_file_type=%s\n" % ('fasta_clean'))  # need to get this somewhere
+#        params_file.write("sequence_file_type=%s\n" % ('fasta_clean'))  # need to get this somewhere
+        params_file.write("sequence_file_type=%s\n" % ('fastq'))  # need to get this somewhere
+        param_text = """# QUALITY FILE: (will be ignored if sequence_file_type is fastq or sff)
+# Leave empty for no quality file and 'yes' if one is sent
+# if compression = gzip the code will expect BOTH fasta and qual file
+# to be compressed
+quality_file=
+"""
+        params_file.write(param_text)                
+        param_text = "\n# COMPRESSION: gzip, or leave empty for none\n"
+        params_file.write(param_text)
+        params_file.write("compression=%s\n" % ('gzip'))  # need to get this somewhere
+
+        param_text = "\n# TAXONOMY CLASSIFICATION\n# currently not used\n"
+        params_file.write(param_text)        
 #        params_file.write("tax_classifier=%s\n" % ('rdp'))  # need to get this somewhere
-        param_text = "# SEQUENCE FILE: fasta, fastq, sff\n"
-        params_file.write(param_text)
-        "TODO: fasta_clean or fastq?"
-#        params_file.write("sequence_file_type=%s\n" % ('fastq'))  # need to get this somewhere
-        param_text = "\n# COMPRESSION: gzip, none ()\n"
-        params_file.write(param_text)
-        "TODO: uncompress on VAMPS or before?"
-#        params_file.write("compression=%s\n" % ('gzip'))  # need to get this somewhere
         params_file.write("tax_classifier=%s\n" % ('gast'))  # need to get this somewhere
         param_text = """\n# GAST
 # for database selection
