@@ -719,7 +719,7 @@ class Submission_Processor (threading.Thread):
             # open the raw file
             raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
             if (compression == "gzip"):
-                ungzip_file(raw_seq_file_name)    
+                self.gunzip(raw_seq_file_name)    
             binary_flag = "b" if file_type == "sff" else ""
             raw_file_handle = open(raw_seq_file_name, "r" + binary_flag)
             # now open/create the clean file
@@ -760,7 +760,7 @@ class Submission_Processor (threading.Thread):
             if quality_file_handle != None:
                 quality_file_handle.close()
                 
-    def ungzip_file(raw_seq_file_name):
+    def ungzip_file(self, raw_seq_file_name):
         import gzip
         f_gz = gzip.open(raw_seq_file_name, 'rb')
         file_content = f_gz.read()
@@ -769,6 +769,21 @@ class Submission_Processor (threading.Thread):
         f = open(temp_file_name, 'w')
         f.write(file_content)        
         f.close()
+        
+    def gunzip(self, file_name):
+        '''Gunzip the given file and then remove the file.'''
+        import gzip, sys
+#        , string
+        r_file = gzip.GzipFile(file_name, 'r')
+#        write_file = string.rstrip(file_name, '.gz')
+        temp_file_name = file_name + ".tmp"
+        w_file = open(temp_file_name, 'w')
+        w_file.write(r_file.read())
+        w_file.close()
+        r_file.close()
+        os.unlink(file_name) # Yes this one too.
+        os.rename(temp_file_name, file_name)
+        sys.stdout.write("%s gunzipped.\n" % (file_name))        
     
     # upload each detail object (a library=sequence file) at a time to VAMPS
     def vamps_upload(self, submission, submissiondetail_array):
