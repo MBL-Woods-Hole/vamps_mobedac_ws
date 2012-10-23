@@ -610,7 +610,7 @@ class Submission_Processor (threading.Thread):
                 # first download it
                 file_type = self.download_raw_sequence_file(detail, sequence_set_id, processing_dir)
                 # now convert it from raw format to clean fasta for VAMPS
-                self.convert_sequence_file(file_type, processing_dir)
+#                self.convert_sequence_file(file_type, processing_dir)
             except:
                 self.log_to_submission_detail(detail, "Error retrieving sequence set: " + detail.sequenceset_id)
                 return        
@@ -647,8 +647,10 @@ class Submission_Processor (threading.Thread):
             # if we didn't find a type we know then default it
             if file_type not in valid_file_types:
                 file_type = "fasta"
+
+
             "TODO: remove hardcoded value, send with params"
-            compression = "gzip"
+#            compression = "gzip"
             """
             if self.runobj.compressed:
             import gzip
@@ -668,6 +670,7 @@ class Submission_Processor (threading.Thread):
 
             # now write out the raw file
             raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
+            
             # this could be an sff file? which would be binary
             binary_flag = "b" if file_type == "sff" else ""
             raw_seq_file = open(raw_seq_file_name, "w" + binary_flag)
@@ -691,10 +694,22 @@ class Submission_Processor (threading.Thread):
                 raw_seq_file.close()
                 
     def get_raw_sequence_file_name(self, file_type, processing_dir):
+        sequence_file_data = LibraryORM.sequence_file_data
+        sequence_file_name = [x['file_name'] for x in sequence_file_data if x['file_id'] == LibraryORM.sequence_set_ids] 
+        return os.path.join(processing_dir, sequence_file_name)
+                
+    def get_raw_sequence_file_name_old(self, file_type, processing_dir):
         return self.get_sequence_file_base_name(file_type, processing_dir) + "." + file_type
 
     def get_sequence_file_base_name(self, file_type, processing_dir):
         return os.path.join(processing_dir, Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX)
+
+#    def get_compression_by_extension(self):
+#        sequence_file_data = LibraryORM.sequence_file_data
+
+    def get_compression_by_extension(self):
+        sequence_file_data = LibraryORM.sequence_file_data
+
 
     # VAMPS wants a fa file in 'clean' format
     # convert from raw format to create clean file and possibly the quality file too
@@ -703,7 +718,7 @@ class Submission_Processor (threading.Thread):
         clean_seq_file_handle = None
         quality_file_handle = None
         "TODO: remove hardcoded value, send with params"
-        compression = "gzip"
+#        compression = "gzip"
         """
         if self.runobj.compressed:
         import gzip
@@ -866,14 +881,15 @@ class Submission_Processor (threading.Thread):
         # create the param file
 #        param_file_name = processing_dir + "params.prm"
         param_file_name = processing_dir + "parameters.txt"
-        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength)
+        platform = library_obj.get_platform()
+        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform)
         
         # now send the files on up
         vamps_status_record_id = self.upload_to_vamps(submission_detail, processing_dir + Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX, primer_file_name, metadata_file_name, param_file_name)
         return vamps_status_record_id
     
     # check with Andy on what he wants for this
-    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title, domain, region, minLength):
+    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform):
         import datetime
 #        t = datetime.time(1, 2, 3)
 #        print 't :', t
@@ -903,7 +919,7 @@ class Submission_Processor (threading.Thread):
 # REQUIRED: platform (454, illumina, ion_torrent)
 """
         params_file.write(param_text)                       
-        params_file.write("platform=%s\n\n" % ('454'))  # need to get this somewhere
+        params_file.write("platform=%s\n\n" % (platform))  # '454' need to get this somewhere
         
         params_file.write("min_length=%s\n" % (minLength))  # need to get this somewhere
         param_text ="\n# required - but leave empty for no limit\n"
