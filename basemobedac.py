@@ -29,7 +29,7 @@ class BaseMoBEDAC():
             if get_parm("remote_objects_are_local").lower() == 'true':
                 new_obj = cls.get_instance(id, sess_obj)
                 if new_obj == None:
-                    raise ObjectRetrievalException("Unable to retrieve object: " + id + " from db");
+                    raise ObjectRetrievalException("xxUnable to retrieve object: " + id + " from db");
             else:
                 headers = {'content-type': 'application/json'}
                 conn = httplib.HTTPConnection(get_parm("mobedac_host"))
@@ -45,7 +45,7 @@ class BaseMoBEDAC():
                 data = response.read()
                 # if all went ok then build an object
                 if response.status != httplib.OK:
-                    raise ObjectRetrievalException("Unable to retrieve object: " + id + " from host: " + get_parm('mobedac_host') + " url: " + complete_url)
+                    raise ObjectRetrievalException("yyUnable to retrieve object: " + id + " from host: " + get_parm('mobedac_host') + " url: " + complete_url)
                 new_obj = cls({})
                 decoded_data = unidecode(data)
                 mobedac_logger.info("json string for object id: " + id + " json: " + decoded_data)
@@ -57,7 +57,7 @@ class BaseMoBEDAC():
             traceback.print_exception(exc_type, exc_value, exc_traceback)   
             raise ore
         except Exception as e:
-            raise ObjectRetrievalException("Unable to retrieve object: " + id + " from host: " + get_parm('mobedac_host') + " url: " + complete_url + " error: " + str(e))
+            raise ObjectRetrievalException("zzUnable to retrieve object: " + id + " from host: " + get_parm('mobedac_host') + " url: " + complete_url + " error: " + str(e))
 
         
         finally:
