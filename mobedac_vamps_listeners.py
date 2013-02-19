@@ -280,12 +280,12 @@ libraries = {
 # "primer_1_name" : "1048R", "primer_1_direction" : "R", "primer_1_sequence" : "GWGGTRCATGGCY?GY?CG", "primer_1_region" : "v6", "primer_1_location" : "1048R" ,
 # "primer_2_name" : "958F", "primer_2_direction" : "F", "primer_2_sequence" : "AATTGGA.?TCAACGCC.G", "primer_2_region" : "v6", "primer_2_location" : "958F",
 #                "library1":"European",
-
         "forward_barcodes": {"value" : "GCTTGCTT"}, #run_key
         "target_subfragment": {"value" : "V2V3"},   #dna_region
         "seq_chem": {"value" : "GS FLX Titanium"},
         "seq_meth": {"value" : "454"},
         "seq_center": {"value" : "engencore"},
+#        "domain":{"unit":"","required":"0","value":"Bacteria","type":"select","definition":"Archaea , Bacteria , Eukarya - requiered by VAMPS","mixs":"0"},
         "domain": {"value" : "Bacteria"},           #domain
         "target_gene": {"value" : "16S rRNA"},
         "metagenome_name": {"value" : "M4"},
@@ -558,7 +558,7 @@ sequencefiles_by_types = {
                             'format' : "sff"}
                  },
                 "fastq_small" : 
-                {'icml1' : {'name' : work_path_local+'/src/icml1.fastq_small',
+                {'icml1' : {'name' : work_path_local+'/src/icml1.fastq_small.gz',
                             'format' : "fastq"}
                  },
                 "fastq_large" : 
@@ -589,7 +589,7 @@ class VampsListener():
     # this method pretends to be the URL that would be called by our api on the VAMPS server
     # for upload of data with a qual file
     @cherrypy.expose
-    def upload_data_post_with_qual_file(self, seqfile, primfile, keyfile, paramfile, qualfile):
+    def upload_data_post_with_qual_file(self, seqfile, primfile, metafile, paramfile, qualfile):
         global requests_array
         requests_array.append("upload_data_post")
         # create the row in VAMPS db
@@ -604,7 +604,7 @@ class VampsListener():
     # this method pretends to be the URL that would be called by our api on the VAMPS server
     # for upload of data without a qual file
     @cherrypy.expose
-    def upload_data_post(self, seqfile, primfile, keyfile, paramfile):
+    def upload_data_post(self, seqfile, primfile, metafile, paramfile):
         global requests_array
         requests_array.append("upload_data_post")
         # create the row in VAMPS db

@@ -43,9 +43,9 @@ class Submission_Processor (threading.Thread):
         # these are the 2 important dictionary maps that map an incoming MOBEDAC metadata field/value into the correct table/column in our db
         self.sample_related_metadata_map_json = samplemetadatamap
         self.sequence_related_metadata_map_json = sequencemetadatamap
-        
+        self.compressed = False
         threading.Thread.__init__(self)
-     
+        self.raw_seq_file_name = ""
     # populates a hash (dictionary) and the values are lists
     # this routine takes care of the bookeeping of seeing if the key
     # is already present in the dictionary.  If it is not present
@@ -365,12 +365,13 @@ class Submission_Processor (threading.Thread):
             details_by_project_name = {}
             for detail in submissiondetail_array:                          
                 status_row = detail.get_VAMPS_submission_status_row(self.sess_obj)
-                print "PPP status_row = " % (status_row)
+                print "PPP status_row = %s" % (status_row)
                 if status_row == None:
-                    raise "Error preparing for GAST no vamps_upload_status record found for submission_detail: " + str(detail.id) + " vamps_status_id: " + str(detail.vamps_status_record_id)
+                    print "Error preparing for GAST no vamps_upload_status record found for submission_detail: %s vamps_status_id: %s" % (str(detail.id), str(detail.vamps_status_record_id))
+#                    raise
 #                    raise "Error preparing for GAST no vamps_upload_status record found for submission_detail: " + str(detail.id) + " vamps_status_id: " + str(submission.vamps_status_record_id)
                 if status_row[0] != self.VAMPS_TRIM_SUCCESS:
-                    self.log_debug("Can't GAST submissiondetail: " + str(detail.id) + " yet, VAMPS status is: " + status_row[0])
+                    self.log_debug("Can't GAST submissiondetail: %s  yet, VAMPS status is: %s" % (str(detail.id), status_row[0]))
                     return
                 #gather them by project name
                 self.accumulate_by_key(details_by_project_name, detail.vamps_project_name, detail)
@@ -609,7 +610,7 @@ class Submission_Processor (threading.Thread):
                 # first download it
                 file_type = self.download_raw_sequence_file(detail, sequence_set_id, processing_dir)
                 # now convert it from raw format to clean fasta for VAMPS
-                self.convert_sequence_file(file_type, processing_dir)
+                # self.convert_sequence_file(file_type, processing_dir)
             except:
                 self.log_to_submission_detail(detail, "Error retrieving sequence set: " + detail.sequenceset_id)
                 return        
@@ -635,7 +636,7 @@ class Submission_Processor (threading.Thread):
             # Tobi is putting the file type into the HTTP header
             response_headers = remote_file_handle.info().headers
             # assume this
-            file_type = "fasta"
+#            file_type = "fasta"
             valid_file_types = ["fasta", "fastq", "sff"]
             for h in response_headers:
                 hlower = h.lower()
@@ -647,10 +648,10 @@ class Submission_Processor (threading.Thread):
             if file_type not in valid_file_types:
                 file_type = "fasta"
             # now write out the raw file
-            raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
+            self.raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
             # this could be an sff file? which would be binary
             binary_flag = "b" if file_type == "sff" else ""
-            raw_seq_file = open(raw_seq_file_name, "w" + binary_flag)
+            raw_seq_file = open(self.raw_seq_file_name, "w" + binary_flag)
             buffer_size=8192
             while 1:
                 copy_buffer = remote_file_handle.read(buffer_size)
@@ -668,7 +669,16 @@ class Submission_Processor (threading.Thread):
                 remote_file_handle.close()
             if raw_seq_file != None:
                 raw_seq_file.close()
+            self.compressed = self.is_compressed()
                 
+    def is_compressed(self):
+        import magic
+        res = magic.from_file(self.raw_seq_file_name)
+        print "magic res = %s\n" % res
+        #magic res = gzip compressed data, was "icml1.fastq_small", from Unix, last modified: Thu May 24 15:31:54 2012
+        if res.startswith("gzip"):
+            return True
+
     def get_raw_sequence_file_name(self, file_type, processing_dir):
         return self.get_sequence_file_base_name(file_type, processing_dir) + "." + file_type
 
@@ -683,9 +693,9 @@ class Submission_Processor (threading.Thread):
         quality_file_handle = None
         try:
             # open the raw file
-            raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
+            self.raw_seq_file_name = self.get_raw_sequence_file_name(file_type, processing_dir)
             binary_flag = "b" if file_type == "sff" else ""
-            raw_file_handle = open(raw_seq_file_name, "r" + binary_flag)
+            raw_file_handle = open(self.raw_seq_file_name, "r" + binary_flag)
             # now open/create the clean file
             clean_seq_file_name = self.get_sequence_file_base_name(file_type, processing_dir) + ".fa"
             clean_seq_file_handle = open(clean_seq_file_name, 'w')
@@ -697,7 +707,7 @@ class Submission_Processor (threading.Thread):
 #                quality_file_handle = open(file_type + ".qual", 'w')
             # use the sff record id rather than trying to parse it with fasta/q
             use_seq_record_id = (file_type == 'sff') 
-            self.log_debug("attempting to convert sequence file: " + raw_seq_file_name)
+            self.log_debug("attempting to convert sequence file: " + self.raw_seq_file_name)
             self.log_debug("attempting to convert type: " + file_type)
             # parse and write out the clean files
             for seq_record in SeqIO.parse(raw_file_handle, file_type):
@@ -711,7 +721,7 @@ class Submission_Processor (threading.Thread):
                 clean_seq_file_handle.write(">%s\t%s\t%s\n" % (id, str(seq_record.seq) , remainder))
                 if generate_quality_file:
                     quality_file_handle.write(">%s\n%s\n" % (id, seq_record.letter_annotations["phred_quality"]))
-            self.log_debug("successfully converted sequence file: " + raw_seq_file_name)
+            self.log_debug("successfully converted sequence file: " + self.raw_seq_file_name)
         except:
             self.log_exception("Error converting raw sequence file to clean fasta format")
             raise
@@ -772,45 +782,125 @@ class Submission_Processor (threading.Thread):
         # now create the primer file
         # first get the owning Library
         primers = library_obj.get_primers()
-        primer_file_name = processing_dir + "primers.txt"
+        primer_file_name = processing_dir + "primers.csv"
         self.create_primer_file(primers, primer_file_name)
         
         # now create the key file
         run_key = library_obj.get_run_key()
-        key_hash = {"key" : run_key, "direction" : library_obj.get_direction(),
-                    "region" : submission_detail.region, "project" : submission_detail.vamps_project_name, "dataset" : submission_detail.vamps_dataset_name}
-        run_key_file_name = processing_dir + "run_key.txt"
-        print "run_key_file_name (%s) = processing_dir (%s) + run_key.txt" % (run_key_file_name, processing_dir)
+        domain  = library_obj.get_domain()
+        region  = submission_detail.region
+        project_title = project.name
+        project_description = project.description[0:255]
+        dataset_description = "Dataset description test" 
+        minLength = 50
+        """
+        use "env_package" from "Retrieving remote sample: mgs62788
+        json string for object id: mgs62788 json:" 
+        """
+        environmental_source_id = 120
+        
+        metadata_hash = {"key" : run_key, "direction" : library_obj.get_direction(),
+                    "project" : submission_detail.vamps_project_name, 
+                    "dataset" : submission_detail.vamps_dataset_name, 
+                    "project_title" : project_title, "project_description" : project_description, "dataset_description" : dataset_description, "environmental_source_id": environmental_source_id
+                    }
+        metadata_file_name = processing_dir + "metadata.csv"
+        print "metadata_file_name (%s) = processing_dir (%s) + metadata.csv" % (metadata_file_name, processing_dir)
 
-        self.write_run_key_file(run_key_file_name, key_hash)
+        self.write_metadatata_file(metadata_file_name, metadata_hash)
         
         # create the param file
-        param_file_name = processing_dir + "params.prm"
-        self.create_params_file(param_file_name, submission.user, run_key, project.description[0:255], "Dataset description test", project.name)
+#        param_file_name = processing_dir + "params.prm"
+        param_file_name = processing_dir + "parameters.txt"
+        platform = library_obj.get_platform()
+        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform)
         
         # now send the files on up
-        vamps_status_record_id = self.upload_to_vamps(submission_detail, processing_dir + Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX, primer_file_name, run_key_file_name, param_file_name)
+        vamps_status_record_id = self.upload_to_vamps(submission_detail, processing_dir + Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX, primer_file_name, metadata_file_name, param_file_name)
         return vamps_status_record_id
     
     # check with Andy on what he wants for this
-    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title):
+    def create_params_file(self, param_file_name, vamps_user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform):
+        import datetime
+#        t = datetime.time(1, 2, 3)
+#        print 't :', t
+        date_now = datetime.date.today()
         param_file_name
         params_file = open(param_file_name, 'w')
+        param_text = """# comments must have a hash on the first line
+# blank lines are okay.
+# convention: two words separated by '_' so: require_distal not: requireDistal
+
+# key, value pairs separated by '=' spaces okay
+# remember that uploads can be multiple projects with multiple datasets
+# no other '=' signs allowed
+"""
+        params_file.write(param_text)
+        
+        param_text ="\n# REQUIRED: username\n"
+        params_file.write(param_text)        
         params_file.write("username=%s\n" % (vamps_user))
+        
+        param_text ="\n# keep this format for date:  yyyy-mm-dd\n"
+        params_file.write(param_text)               
         params_file.write("time=%s\n" % ('daytime'))
-        params_file.write("platform=%s\n" % ('454'))  # need to get this somewhere
-        params_file.write("%s:description=%s\n" % (run_key,dataset_description))
-        params_file.write("env_source=%s\n" % ('marine'))  # neeed to get this from somewhere
-        params_file.write("project_description=%s\n" % (project_description))
-        params_file.write("project_title=%s\n" % (project_title))
+        params_file.write("date=%s\n" % (date_now))
+        
+        param_text ="""\n# this is imprtant for the style of read_id during validation
+# REQUIRED: platform (454, illumina, ion_torrent)
+"""
+        params_file.write(param_text)                       
+        params_file.write("platform=%s\n\n" % (platform))  # '454' need to get this somewhere
+        
+        params_file.write("min_length=%s\n" % (minLength))  # need to get this somewhere
+        param_text ="\n# required - but leave empty for no limit\n"
+        params_file.write(param_text)
+        params_file.write("max_length=%s\n" % (''))  # need to get this somewhere
+        params_file.write("require_distal=%s\n" % ('1'))  # need to get this somewhere
+        param_text = "\n# these seqs are trimmed or raw?\n# for now all sequences are 'raw'\n"
+        params_file.write(param_text)
+        params_file.write("upload_type=%s\n" % ('raw'))  # need to get this somewhere
+        param_text = "\n# SEQUENCE FILE: (fasta, fastq, sff)\n# REQUIRED\n"
+        params_file.write(param_text)
+#        params_file.write("sequence_file_type=%s\n" % ('fasta_clean'))  # need to get this somewhere
+        params_file.write("sequence_file_type=%s\n" % ('fastq'))  # need to get this somewhere
+        param_text = """# QUALITY FILE: (will be ignored if sequence_file_type is fastq or sff)
+# Leave empty for no quality file and 'yes' if one is sent
+# if compression = gzip the code will expect BOTH fasta and qual file
+# to be compressed
+quality_file=
+"""
+        params_file.write(param_text)                
+        param_text = "\n# COMPRESSION: gzip, or leave empty for none\n"
+        params_file.write(param_text)
+        compr = "" 
+        if self.compressed:
+            compr = "gzip" 
+
+        params_file.write("compression=%s\n" % (compr))  # need to get this somewhere
+
+        param_text = "\n# TAXONOMY CLASSIFICATION\n# currently not used\n"
+        params_file.write(param_text)        
+#        params_file.write("tax_classifier=%s\n" % ('rdp'))  # need to get this somewhere
+        params_file.write("tax_classifier=%s\n" % ('gast'))  # need to get this somewhere
+        param_text = """\n# GAST
+# for database selection
+# These are also in the metadata file on each line
+# but these are used exclusively for GASTing mobedac
+"""
+        params_file.write(param_text)
+        params_file.write("dna_region=%s\n" % (region))  # need to get this somewhere
+        params_file.write("domain=%s\n" % (domain))  # need to get this somewhere
+
         params_file.flush()
         params_file.close()
 
-    # generate the run key file...format of this can be found in the Upload section on the VAMPS website
-    def write_run_key_file(self, run_key_file_name, key_hash):
-        run_key_file_name
-        key_file = open(run_key_file_name, 'w')
-        key_line = Template("$key\t$direction\t$region\t$project\t$dataset\n").substitute(key_hash)
+    def write_metadatata_file(self, metadata_file_name, metadata_hash):
+        metadata_file_name
+        key_file = open(metadata_file_name, 'w')
+        header_line = "runkey,project,dataset,sequence_direction,project_title,project_description,dataset_description,environmental_source_id\n"
+        key_file.write(header_line)
+        key_line = Template("$key,$project,$dataset,$direction,$project_title,$project_description,$dataset_description,$environmental_source_id\n").substitute(metadata_hash)
         key_file.write(key_line)
         key_file.close()
         
@@ -823,23 +913,27 @@ class Submission_Processor (threading.Thread):
             # force in some defaults...maybe mobedac won't have them
             primer["name"] = primer.get("name", "p_" + str(p_index))
 #            primer["location"] = primer.get("location", "p_" + str(p_index))
-            primer_line = Template("$name\t$direction\t$sequence\t$regions\t$location\n").substitute(primer)
-#            print "PPP primer_line = " % (primer_line)
+#            old:
+#            primer_line = Template("$name\t$direction\t$sequence\t$regions\t$location\n").substitute(primer)
+            primer_line = Template("$name,$direction,$sequence\n").substitute(primer)
             primer_file.write(primer_line)
             p_index += 1
         primer_file.close()
             
-    def upload_to_vamps(self, submission_detail, sequence_file_name_prefix, primer_file_name, run_key_file_name, param_file_name):
+    def upload_to_vamps(self, submission_detail, sequence_file_name_prefix, primer_file_name, metadata_file_name, param_file_name):
         response = None
         try:
             # headers contains the necessary Content-Type and Content-Length
             # datagen is a generator object that yields the encoded parameters
             # VAMPS expects 4 or 5 files in this multipart form upload they have the parameter names shown below
+#            seq_file_name =         return os.path.join(sequence_file_name_prefix, str(submission.id))
+#                         'seqfile'   : open(sequence_file_name_prefix + ".fa","r"),
+ 
             post_params = {
-                         'seqfile'   : open(sequence_file_name_prefix + ".fa","r"),
-                         'primfile'  : open(primer_file_name,"r"),
-                         'keyfile'   : open(run_key_file_name,"r"),
-                         'paramfile' : open(param_file_name,"r")
+                         'seqfile'   : open(self.raw_seq_file_name, "r"),
+                         'primfile'  : open(primer_file_name, "r"),
+                         'metafile'  : open(metadata_file_name, "r"),
+                         'paramfile' : open(param_file_name, "r")
                          }
             # where to send it?
             vamps_upload_url = get_parm('vamps_data_post_url')
