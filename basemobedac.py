@@ -10,6 +10,7 @@ from initparms import get_parm
 from object_retrieval_exception import ObjectRetrievalException
 from rest_log import mobedac_logger
 
+
 class BaseMoBEDAC():
     BASE_ID = "id"
     BASE_NAME = "name"
