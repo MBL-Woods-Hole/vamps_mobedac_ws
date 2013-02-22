@@ -111,28 +111,29 @@ class SubmissionORM(Base, BaseMoBEDAC):
         detail_objs = []
         for lib_id in libraries:
             try:
-                mobedac_logger.info("Retrieving remote library: " + lib_id);
+                mobedac_logger.info("Retrieving remote library: " + str(lib_id));
                 library_hash[lib_id] = curr_library = LibraryORM.getFromMOBEDAC(lib_id, None, sess_obj)
             except Exception as e:
                 # some kind of error 
-                raise SubmissionException("There was an error retrieving library: " + lib_id + " error: " + e.value)
+                raise SubmissionException("There was an error retrieving library: " + str(lib_id) + " error: " + str(e))
                 
-            sample_id = curr_library.sample
+            sample_id = str(curr_library.sample)
+            #mobedac_logger.info("sample_id: " + str(sample_id) );
             try:
-                mobedac_logger.info("Retrieving remote sample: " + sample_id);
+                mobedac_logger.info("Retrieving remote sample: " + str(sample_id));
                 sample_hash[sample_id] = curr_sample = SampleORM.getFromMOBEDAC(sample_id, None, sess_obj)
             except Exception as e:
                 # some kind of error 
-                raise SubmissionException("There was an error retrieving sample: " + sample_id + " error: " + e.value)
+                raise SubmissionException("There was an error retrieving sample: " + str(sample_id) + " error: " + str(e))
             
             project_id = curr_sample.project
             try:
-                mobedac_logger.info("Retrieving remote project: " + project_id);
+                mobedac_logger.info("Retrieving remote project: " + str(project_id));
                 project_hash[project_id] = curr_project = ProjectORM.getFromMOBEDAC(project_id, None, sess_obj)
-                mobedac_logger.info("done Retrieving remote project: " + project_id);
+                mobedac_logger.info("done Retrieving remote project: " + str(project_id));
             except Exception as e:
                 # some kind of error 
-                raise SubmissionException("There was an error retrieving project: " + project_id + " error: " + e.value)
+                raise SubmissionException("There was an error retrieving project: " + str(project_id) + " error: " + str(e))
 
             # do some sanity check/validation on the library and project information
             mobedac_logger.info("library domain: " + curr_library.get_domain())
@@ -140,13 +141,13 @@ class SubmissionORM(Base, BaseMoBEDAC):
             mobedac_logger.info("library region: " + curr_library.get_region())
             mobedac_logger.info("project metadatastr: " + curr_project.mbd_metadata)
             if not(curr_library.get_run_key()):
-                raise SubmissionException("The library: " + lib_id + " is missing a run key")
+                raise SubmissionException("The library: " + str(lib_id) + " is missing a run key")
             if not(curr_library.get_domain()):
-                raise SubmissionException("The library: " + lib_id + " is missing a domain")
+                raise SubmissionException("The library: " + str(lib_id) + " is missing a domain")
             if not(curr_library.get_region()):
-                raise SubmissionException("The library: " + lib_id + " is missing a region")
+                raise SubmissionException("The library: " + str(lib_id) + " is missing a region")
             #if not(curr_project.get_metadata_json()['vamps_id']):
-                raise SubmissionException("The project: " + lib_id + " is missing a vamps_id")
+                raise SubmissionException("The project: " + str(lib_id) + " is missing a vamps_id")
             #check the primers
             primers = curr_library.get_primers()
             # if only 1 primer and it isn't a BOTH direction then complain

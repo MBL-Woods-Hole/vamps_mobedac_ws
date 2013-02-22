@@ -3,6 +3,7 @@ import json
 from dbconn import test_engine
 from threading import Thread
 import time
+import sys
 
 
 def createObject(data_json, object_str):
@@ -36,6 +37,11 @@ def clearListenerResults():
     conn.request("GET", "/clear_requests")
     response = conn.getresponse()
     conn.close()
+
+# from mobedac_blank.py
+#file_data = {"analysis_system":"VAMPS","library_ids":["139824","139820"],
+#             "analysis_params":{"auth":"TkzmLuiSuwQEhivEveZ7tvYiB","user":"mobedac","vamps_user":"plustig"}}
+#file_contents = json.dumps(file_data)
 
 submission_data_l1_only = {"library_ids" : ['l1'
                                     #, 
@@ -76,6 +82,7 @@ def test_by_type(seq_file_type, submission_object, expected_names):
     # now we need to loop and check status
     while True:
         # get the status of the submission
+        
         submission_str = getObject("submission", submission_id)
         submission_json = json.loads(submission_str)
         overall_status = submission_json['status_code']
@@ -83,8 +90,9 @@ def test_by_type(seq_file_type, submission_object, expected_names):
             # call over to the mobedac_vamps_listener.py process and get 
             # the list of all calls that it registered made to it from our API service
             listener_calls = getListenerResults()
+            
             print "Calls made to Mobedac: " + listener_calls
-            print "Expcted Calls Mobedac: " + str(expected_names)
+            print "Expected Calls Mobedac: " + str(expected_names)
             # are they ok?
             listener_calls_array = json.loads(listener_calls)
             if len(listener_calls_array) != len(expected_names ):
@@ -104,11 +112,13 @@ def test_by_type(seq_file_type, submission_object, expected_names):
         time.sleep(10)
 
 # should post 3 times, gast twice, and tax table once and 1 data return
-expected_names_123 = ['upload_data_post', 'upload_data_post', 'upload_data_post', 'upload_data_gast', 'generate_taxonomy_table', 'POST results']
-#expected_names = ['upload_data_post', 'upload_data_gast', 'generate_taxonomy_table', 'POST results']
+#expected_names_123 = ['upload_data_post', 'upload_data_post', 'upload_data_post', 'upload_data_gast', 'generate_taxonomy_table', 'POST results']
 #test_by_type('fasta', submission_data_l123, expected_names_123)
+#===============
+# should post, gast, tax table and data return 1 time each
+expected_names = ['upload_data_post', 'upload_data_gast', 'generate_taxonomy_table', 'POST results']
 #test_by_type('fasta', submission_data_l1_only, expected_names)
-test_by_type('fastq_small', submission_data_l1_only, expected_names_123)
-#test_by_type('sff_small',submission_data_l1_only, expected_names)
+#test_by_type('fastq_small', submission_data_l1_only, expected_names)
+test_by_type('sff_small',submission_data_l1_only, expected_names)
 #test_by_type('fastq_large', submission_data_l1_only, expected_names)
 

@@ -11,7 +11,7 @@ from mycfg import *
 import time
 import datetime
  
-today = datetime.datetime.now().strftime("%Y-%m-%d")
+today=datetime.datetime.now().strftime("%Y-%m-%d")
 
 projects = {'p1' : {'id' : 'p1', 'name': 'ICM_PRJ', 'about': 'This is projectG update2', 'url' : 'testurl', 'pi' : 'John Hufnagle',
         "funding_source" : "keck",

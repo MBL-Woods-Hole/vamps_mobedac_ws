@@ -198,6 +198,7 @@ class Submission_Processor (threading.Thread):
                     # find the action as a method/function on this SubmissionProcessor class
                     action_method = getattr(self, action)
                     # do the action...and call it
+                    #self.log_exception(str(action_method))
                     action_method(submission, detail_array)
                 except:
                     self.log_exception("Got exception action: " + action + " processing submission id: " + str(submission.id))

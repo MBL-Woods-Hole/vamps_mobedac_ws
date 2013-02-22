@@ -83,7 +83,7 @@ class LibraryORM(Base, BaseMoBEDAC):
 
 #        stage_name = json_obj[self.SEQUENCESET_ID_ARRAY]['stage_name']
 #        self.sequence_set_ids = ",".join(json_obj[self.SEQUENCESET_ID_ARRAY])  # just keep this as a string everywhere until being used
-        self.sequence_set_ids = ",".join(sequence_file_names)
+        self.sequence_set_ids = ",".join([str(i) for i in sequence_file_names])
         mobedac_logger.info("library has sequence set ids: " + self.sequence_set_ids)
 #        print self.sequence_set_ids
         # now put the objects into the real child collection
