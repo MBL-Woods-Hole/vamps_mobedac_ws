@@ -28,12 +28,14 @@ class SubmissionORM(Base, BaseMoBEDAC):
     ANALYSIS_PARAMS = 'analysis_params'
     LIBRARY_IDS = 'library_ids'
     USER = 'user'
+    VAMPS_USER = 'vamps_user'
     AUTH_KEY = 'auth'
     
     id = Column(Integer, primary_key=True)
     analysis_params_str = Column(String(1024))
     library_ids_str = Column(String(1024))
     user = Column(String(32))
+    vamps_user = Column(String(32))
     auth_key = Column(String(128))
     
     @classmethod
@@ -61,6 +63,7 @@ class SubmissionORM(Base, BaseMoBEDAC):
         self.analysis_params_str = json.dumps(json_obj[self.ANALYSIS_PARAMS]) 
         self.analysis_params = json_obj[self.ANALYSIS_PARAMS] 
         self.user = self.analysis_params[self.USER]
+        self.vamps_user = self.analysis_params[self.VAMPS_USER]
         self.auth_key = self.analysis_params[self.AUTH_KEY]
         return self
     
@@ -68,6 +71,7 @@ class SubmissionORM(Base, BaseMoBEDAC):
         parts = []
         
         self.dump_attr(parts,self.user, SubmissionORM.USER)
+        self.dump_attr(parts,self.vamps_user, SubmissionORM.VAMPS_USER)
         self.dump_attr(parts,self.id, SubmissionORM.ID)
         
         params_as_dictionary = json.loads(self.analysis_params_str)
@@ -117,58 +121,65 @@ class SubmissionORM(Base, BaseMoBEDAC):
                 # some kind of error 
                 raise SubmissionException("There was an error retrieving library: " + str(lib_id) + " error: " + str(e))
                 
-            sample_id = str(curr_library.sample)
-            #mobedac_logger.info("sample_id: " + str(sample_id) );
-            try:
-                mobedac_logger.info("Retrieving remote sample: " + str(sample_id));
-                sample_hash[sample_id] = curr_sample = SampleORM.getFromMOBEDAC(sample_id, None, sess_obj)
-            except Exception as e:
-                # some kind of error 
-                raise SubmissionException("There was an error retrieving sample: " + str(sample_id) + " error: " + str(e))
+            mobedac_logger.info("sample: " + str(curr_library.sample) );  
             
-            project_id = curr_sample.project
-            try:
-                mobedac_logger.info("Retrieving remote project: " + str(project_id));
-                project_hash[project_id] = curr_project = ProjectORM.getFromMOBEDAC(project_id, None, sess_obj)
-                mobedac_logger.info("done Retrieving remote project: " + str(project_id));
-            except Exception as e:
-                # some kind of error 
-                raise SubmissionException("There was an error retrieving project: " + str(project_id) + " error: " + str(e))
+            sample_id = str(curr_library.sample)
+            mobedac_logger.info('file_name(s) '+str(curr_library.sequence_set_names))
+            
+            
+#             
+#             # THIS DOESN'T WORK 2013-3-27
+#             try:
+#                 mobedac_logger.info("Retrieving remote sample: " + str(sample_id));
+#                 # getFromMOBEDAC is in basmobedac.py
+#                 sample_hash[sample_id] = curr_sample = SampleORM.getFromMOBEDAC(sample_id, None, sess_obj)
+#             except Exception as e:
+#                 # some kind of error 
+#                 raise SubmissionException("There was an error retrieving sample: " + str(sample_id) + " error: " + str(e))
+#             
+#             project_id = curr_sample.project
+#             try:
+#                 mobedac_logger.info("Retrieving remote project: " + str(project_id));
+#                 project_hash[project_id] = curr_project = ProjectORM.getFromMOBEDAC(project_id, None, sess_obj)
+#                 mobedac_logger.info("done Retrieving remote project: " + str(project_id));
+#             except Exception as e:
+#                 # some kind of error 
+#                 raise SubmissionException("There was an error retrieving project: " + str(project_id) + " error: " + str(e))
 
             # do some sanity check/validation on the library and project information
-            mobedac_logger.info("library domain: " + curr_library.get_domain())
-            mobedac_logger.info("library run_key: " + curr_library.get_run_key())
-            mobedac_logger.info("library region: " + curr_library.get_region())
-            mobedac_logger.info("project metadatastr: " + curr_project.mbd_metadata)
-            if not(curr_library.get_run_key()):
-                raise SubmissionException("The library: " + str(lib_id) + " is missing a run key")
-            if not(curr_library.get_domain()):
-                raise SubmissionException("The library: " + str(lib_id) + " is missing a domain")
-            if not(curr_library.get_region()):
-                raise SubmissionException("The library: " + str(lib_id) + " is missing a region")
-            #if not(curr_project.get_metadata_json()['vamps_id']):
-                raise SubmissionException("The project: " + str(lib_id) + " is missing a vamps_id")
+            #mobedac_logger.info("library domain: " + curr_library.get_domain())
+            #mobedac_logger.info("library run_key: " + curr_library.get_run_key())
+            #mobedac_logger.info("library region: " + curr_library.get_region())
+            #mobedac_logger.info("project metadatastr: " + curr_project.mbd_metadata)
+#             if not(curr_library.get_run_key()):
+#                 raise SubmissionException("The library: " + str(lib_id) + " is missing a run key")
+#             if not(curr_library.get_domain()):
+#                 raise SubmissionException("The library: " + str(lib_id) + " is missing a domain")
+#             if not(curr_library.get_region()):
+#                 raise SubmissionException("The library: " + str(lib_id) + " is missing a region")
+#             #if not(curr_project.get_metadata_json()['vamps_id']):
+#                 raise SubmissionException("The project: " + str(lib_id) + " is missing a vamps_id")
             #check the primers
-            primers = curr_library.get_primers()
+#            primers = curr_library.get_primers()
             # if only 1 primer and it isn't a BOTH direction then complain
-            forward_found = False
-            reverse_found = False
+#            forward_found = False
+#            reverse_found = False
             mobedac_logger.info("done Retrieving remote objects");
-            for primer in primers:
-                dir = primer['direction'].lower()
-                if dir == 'f':
-                    forward_found = True
-                elif dir == 'r':
-                    reverse_found = True
-            if not(forward_found) or not(reverse_found):
-                raise SubmissionException("You must supply at least 1 forward primer and 1 reverse primer.")
-            mobedac_logger.info("done with primers");
+#             for primer in primers:
+#                 dir = primer['direction'].lower()
+#                 if dir == 'f':
+#                     forward_found = True
+#                 elif dir == 'r':
+#                     reverse_found = True
+#             if not(forward_found) or not(reverse_found):
+#                 raise SubmissionException("You must supply at least 1 forward primer and 1 reverse primer.")
+#             mobedac_logger.info("done with primers");
             
             # now what will the official project name be in vamps for this library?
-            curr_library_domain = curr_library.get_domain()
-            curr_library_region = curr_library.get_region()
-            domain_region_suffix = '_' + curr_library_domain[0].upper() + curr_library_region.lower()
-            vamps_project_name = curr_project.get_metadata_json()['vamps_id']['value'] + domain_region_suffix
+#            curr_library_domain = curr_library.get_domain()
+#            curr_library_region = curr_library.get_region()
+#            domain_region_suffix = '_' + curr_library_domain[0].upper() + curr_library_region.lower()
+#            vamps_project_name = curr_project.get_metadata_json()['vamps_id']['value'] + domain_region_suffix
             
 #                    self.set_attrs_from_json(json_obj, self.SAMPLE)
 ##        stage_name == 'upload'
@@ -179,14 +190,28 @@ class SubmissionORM(Base, BaseMoBEDAC):
             mobedac_logger.info("preparing the submission detail object");
             # now create the submission details objects
             new_details = SubmissionDetailsORM(None)
-            new_details.project_id = project_id
-            new_details.library_id = lib_id
-            new_details.sample_id = sample_id
-            new_details.region = curr_library_region.lower()
+            
+            
+            #new_details.project_id = project_id
+            new_details.project_id = "XX_ID"
+            vamps_project_name = "MOBEDAC_TEST_"+new_details.project_id
             new_details.vamps_project_name = vamps_project_name
+            
+            new_details.library_id = lib_id
+            
+            new_details.sample_id = sample_id
+            
+            #new_details.region = curr_library_region.lower()
+            new_details.region = ''
+            
+            
+            
+            new_details.sequence_file_url = curr_library.sequence_set_names
+            
             detail_objs.append(new_details)
+            
             # mobedac uses periods...we don't want them
-            dataset_name = curr_library.id.replace('.', '_')
+            dataset_name = str(curr_library.id).replace('.', '_')
             new_details.vamps_dataset_name = dataset_name
             new_details.sequenceset_id = curr_library.get_sequence_set_id_array()[0] # just take the first one for now
             mobedac_logger.info("new_details has sequence set id: " + new_details.sequenceset_id)

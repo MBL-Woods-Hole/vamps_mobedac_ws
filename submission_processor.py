@@ -21,7 +21,7 @@ from sqlalchemy import  and_
 from dbconn import Session, test_engine
 from initparms import get_parm
 from submission_detailsorm import SubmissionDetailsORM
-from shutil import rmtree
+from shutil import rmtree, move
 from metadata_maps import samplemetadatamap, sequencemetadatamap
 
 class Submission_Processor (threading.Thread):
@@ -31,6 +31,7 @@ class Submission_Processor (threading.Thread):
     
     # some VAMPS processing code
     VAMPS_TRIM_SUCCESS = "TRIM_SUCCESS"
+    VAMPS_LOAD_SUCCESS = "LOAD_SUCCESS"
     VAMPS_GAST_COMPLETE = "GAST_SUCCESS"
 
     def __init__(self, sleep_seconds, vamps_upload_url, vamps_gast_url, processing_dir):
@@ -130,6 +131,7 @@ class Submission_Processor (threading.Thread):
         processing_dir = self.get_submission_processing_dir(submission)
         if os.path.exists(processing_dir) == False:
             os.mkdir(processing_dir)
+        self.log_debug("processing_dir "+processing_dir)
         return processing_dir
 
     def create_submission_detail_processing_dir(self, submission, submissiondetail):
@@ -151,17 +153,21 @@ class Submission_Processor (threading.Thread):
                 if self.exitFlag:
                     return;
                 # find all submission_details objects that are want to have their data downloaded from MOBEDAC and processed
+                self.log_debug("detail-1: ")
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_DOWNLOAD)
                 if self.exitFlag:
                     return;
+                self.log_debug("detail-2: ")
                 # find all submission_details objects that are want to uploaded to VAMPS for processing
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_VAMPS_UPLOAD)
                 if self.exitFlag:
                     return;
+                self.log_debug("detail-3: ")
                 # find all submission_details objects that are want to be GASTed by VAMPS
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_GAST)
                 if self.exitFlag:
                     return;
+                self.log_debug("detail-4: ")
                 # now return the answers to MOBEDAC
                 self.return_results_to_mobedac()
                 if self.exitFlag:
@@ -175,15 +181,18 @@ class Submission_Processor (threading.Thread):
         try:
             self.sess_obj = Session()
             details_hashed_by_submission_id = {}
-                
+            
             # get all pending submission detail objects and put them in a hash where each key is the submission id
             # and each value is an array of detail objects and the detail's next_action is the 'action' input parm
             details_hashed_by_submission_id = {}
             for detail in self.sess_obj.query(SubmissionDetailsORM).filter(SubmissionDetailsORM.next_action == action).all():
+                self.log_debug("detail: "+str(detail))
                 self.accumulate_by_key(details_hashed_by_submission_id, detail.submission_id, detail)
                 
-            # loop over the dictionary key is submission id and the value is an array of detail objects
+            # loop over the dictionary: key is submission id and the value is an array of detail objects
             for submission_id, detail_array in details_hashed_by_submission_id.items():
+                self.log_debug(str(submission_id)+' - '+str(detail_array))
+                #self.log_debug("submission_id, detail_array: "+str(submission_id)+" -- "+str(detail_array))
                 # get the submission object from the db
                 submission = self.sess_obj.query(SubmissionORM).filter(SubmissionORM.id == submission_id).one()
                 # make sure the base processing dir is there
@@ -371,7 +380,7 @@ class Submission_Processor (threading.Thread):
                     print "Error preparing for GAST no vamps_upload_status record found for submission_detail: %s vamps_status_id: %s" % (str(detail.id), str(detail.vamps_status_record_id))
 #                    raise
 #                    raise "Error preparing for GAST no vamps_upload_status record found for submission_detail: " + str(detail.id) + " vamps_status_id: " + str(submission.vamps_status_record_id)
-                if status_row[0] != self.VAMPS_TRIM_SUCCESS:
+                if status_row[0] != self.VAMPS_LOAD_SUCCESS:
                     self.log_debug("Can't GAST submissiondetail: %s  yet, VAMPS status is: %s" % (str(detail.id), status_row[0]))
                     return
                 #gather them by project name
@@ -604,7 +613,8 @@ class Submission_Processor (threading.Thread):
             # lets make a dir for the data for this object  dir:  <root>/submission.id/submission_detail.id/
             processing_dir = self.create_submission_detail_processing_dir(submission, detail)
 
-            sequence_set_id = detail.sequenceset_id  
+            sequence_set_id = detail.sequenceset_id 
+            
             print "SSS: detail = %s, sequence_set_id = %s" % (detail, sequence_set_id)    
             # now get the sequence set as object? or just a file? how?
             try:
@@ -630,7 +640,10 @@ class Submission_Processor (threading.Thread):
 
         try:
             # get a connection to the file
-            full_seq_file_download_url = "http://" + get_parm("mobedac_host") + get_parm("mobedac_base_path") + "sequenceSet/" + sequence_set_id + "?auth=" + get_parm("mobedac_auth_key")                
+            # AV now we have the file url (may be more than one)
+            full_seq_file_download_url = detail.sequence_file_url + "?auth=" + get_parm("mobedac_auth_key")
+            #full_seq_file_download_url = "http://" + get_parm("mobedac_host") + get_parm("mobedac_base_path") + "sequenceSet/" + sequence_set_id + "?auth=" + get_parm("mobedac_auth_key")                
+            
             self.log_debug("attempting download of seq file with url: " + full_seq_file_download_url)
             remote_file_handle = urllib2.urlopen(full_seq_file_download_url)                
             # is it fasta or what?
@@ -672,6 +685,7 @@ class Submission_Processor (threading.Thread):
                 raw_seq_file.close()
             self.compressed = self.is_compressed()
                 
+                
     def is_compressed(self):
         import magic
         res = magic.from_file(self.raw_seq_file_name)
@@ -681,7 +695,7 @@ class Submission_Processor (threading.Thread):
             return True
 
     def get_raw_sequence_file_name(self, file_type, processing_dir):
-        return self.get_sequence_file_base_name(file_type, processing_dir) + "." + file_type
+        return self.get_sequence_file_base_name(file_type, processing_dir) + "." + file_type + ".gz"
 
     def get_sequence_file_base_name(self, file_type, processing_dir):
         return os.path.join(processing_dir, Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX)
@@ -751,6 +765,7 @@ class Submission_Processor (threading.Thread):
         except:
             self.log_to_submission_detail(submissiondetail, "Upload to VAMPS, Error retrieving submission project: " + submissiondetail.project_id)
             return
+            
         try:
             # get the Library from MOBEDAC
             library = LibraryORM.getFromMOBEDAC(submissiondetail.library_id, None, self.sess_obj)
@@ -766,7 +781,7 @@ class Submission_Processor (threading.Thread):
             #
             # this routine will create the primer, key, param files and then submit      
             submissiondetail.vamps_status_record_id = self.create_files_and_upload(submission, submissiondetail, project, library)
-    
+            mobedac_logger.debug("vamps_status_record_id",str(submissiondetail.vamps_status_record_id))
             # if all went ok then mark this as completed
             submissiondetail.next_action = SubmissionDetailsORM.ACTION_GAST
             # save it
@@ -782,14 +797,14 @@ class Submission_Processor (threading.Thread):
 
         # now create the primer file
         # first get the owning Library
-        primers = library_obj.get_primers()
+#        primers = library_obj.get_primers()
         primer_file_name = processing_dir + "primers.csv"
-        self.create_primer_file(primers, primer_file_name)
+#        self.create_primer_file(primers, primer_file_name)
         
         # now create the key file
-        run_key = library_obj.get_run_key()
-        domain  = library_obj.get_domain()
-        region  = submission_detail.region
+#        run_key = library_obj.get_run_key()
+#        domain  = library_obj.get_domain()
+#        region  = submission_detail.region
         project_title = project.name
         project_description = project.description[0:255]
         dataset_description = "Dataset description test" 
@@ -798,23 +813,67 @@ class Submission_Processor (threading.Thread):
         use "env_package" from "Retrieving remote sample: mgs62788
         json string for object id: mgs62788 json:" 
         """
-        environmental_source_id = 120
+        environmental_source_id = 100
         
-        metadata_hash = {"key" : run_key, "direction" : library_obj.get_direction(),
+#        metadata_hash = {"key" : run_key, "direction" : library_obj.get_direction(),
+#                    "project" : submission_detail.vamps_project_name, 
+#                    "dataset" : submission_detail.vamps_dataset_name, 
+#                    "project_title" : project_title, "project_description" : project_description, "dataset_description" : dataset_description, "environmental_source_id": environmental_source_id
+#                    }
+        metadata_hash = {
                     "project" : submission_detail.vamps_project_name, 
-                    "dataset" : submission_detail.vamps_dataset_name, 
-                    "project_title" : project_title, "project_description" : project_description, "dataset_description" : dataset_description, "environmental_source_id": environmental_source_id
-                    }
+                    "user":submission.user,
+                    "vamps_user":submission.vamps_user,
+                    "local_seq_file_name":self.raw_seq_file_name,
+                    "project_title" : project_title, 
+                    "project_description" : project_description, 
+                    "dataset_description" : dataset_description, 
+                    "environmental_source_id": environmental_source_id,
+                    "rows": [], 
+                    "data": [], 
+                    "columns": [
+                        {"id": submission_detail.vamps_dataset_name,
+                            "sequence_sets": 
+                            [
+                                {   "file_type": "FASTQ", 
+                                    "file_name": submission_detail.sequence_file_url, 
+                                    "stage_name": "upload"
+                                    
+                                }
+                            ], 
+                             "metadata": {
+                                "dna_region":"v6",
+                                "project_title": "Project Title",
+                                "project_description":"Project Description",
+                                "dataset":"3.23.CL.N.139821",
+                                "dataset_description":"Dataset Description",
+                                "domain":"bacteria",
+                                "public":1,
+                                "env_source_id":environmental_source_id
+                                }
+                        }
+                    ]            
+        }            
         metadata_file_name = processing_dir + "metadata.csv"
         print "metadata_file_name (%s) = processing_dir (%s) + metadata.csv" % (metadata_file_name, processing_dir)
 
-        self.write_metadatata_file(metadata_file_name, metadata_hash)
+#        self.write_metadatata_file(metadata_file_name, metadata_hash)
+        self.biom_file = processing_dir + "library.biom"
+        
+        self.write_biom_file(self.biom_file, metadata_hash)
+        # library json: 
+        #{"sample": 144479, "sequence_sets": [
+        #{"file_type": "FASTQ", "file_name": "http://www.microbio.me/qiime/studies/study_314/processed_data_FA6P1OK_/split_libraries/per_sample_fastq/seqs_3.23.CL.N.139821.fastq.gz", 
+        #"stage_name": "upload", "stage_id": 139820, "id": 139820}], 
+        #"about": "4.7.SN", "version": 0, "metagenome": null, "created": "4/7/08", 
+        #"url": "http://www.microbio.me/r/library/139820", "id": 139820, "reads": null, 
+        #"metadata": {"metadata1": "value1", "metadata2": "value2"}}
         
         # create the param file
-#        param_file_name = processing_dir + "params.prm"
-        param_file_name = processing_dir + "parameters.txt"
-        platform = library_obj.get_platform()
-        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform)
+        param_file_name = processing_dir + "params.prm"
+#        param_file_name = processing_dir + "parameters.txt"
+#        platform = library_obj.get_platform()
+#        self.create_params_file(param_file_name, submission.user, run_key, project_description, dataset_description, project_title, domain, region, minLength, platform)
         
         # now send the files on up
         vamps_status_record_id = self.upload_to_vamps(submission_detail, processing_dir + Submission_Processor.MOBEDAC_SEQUENCE_FILE_NAME_PREFIX, primer_file_name, metadata_file_name, param_file_name)
@@ -905,6 +964,14 @@ quality_file=
         key_file.write(key_line)
         key_file.close()
         
+    def write_biom_file(self, biom_file_name, metadata):
+        biom_file = open(biom_file_name, 'w')
+        #biom_file.write("{")
+        #biom_file.write(metadata+"\n")
+        biom_file.write(json.dumps(metadata)+"\n")
+        #biom_file.write("}\n")
+        biom_file.close()
+        
     # generate the primer file...format of this can be found in the Upload section on the VAMPS website    
     def create_primer_file(self, primer_array, primer_file_name):
         primer_file_name
@@ -923,26 +990,35 @@ quality_file=
             
     def upload_to_vamps(self, submission_detail, sequence_file_name_prefix, primer_file_name, metadata_file_name, param_file_name):
         response = None
+        print "vamps_project_name",submission_detail.vamps_project_name
         try:
             # headers contains the necessary Content-Type and Content-Length
             # datagen is a generator object that yields the encoded parameters
             # VAMPS expects 4 or 5 files in this multipart form upload they have the parameter names shown below
 #            seq_file_name =         return os.path.join(sequence_file_name_prefix, str(submission.id))
 #                         'seqfile'   : open(sequence_file_name_prefix + ".fa","r"),
- 
-            post_params = {
-                         'seqfile'   : open(self.raw_seq_file_name, "r"),
-                         'primfile'  : open(primer_file_name, "r"),
-                         'metafile'  : open(metadata_file_name, "r"),
-                         'paramfile' : open(param_file_name, "r")
-                         }
+            self.log_debug("self.raw_seq_file_name: "+self.raw_seq_file_name)
+            # seq file is gzipped fastq
+            
+            post_params = 	{
+            				'seqfile'   : open(self.raw_seq_file_name, "r"),
+            				'biomfile'	: open(self.biom_file, "r"),
+            				'project'   : submission_detail.vamps_project_name
+            				}
+#             post_params = {
+#                          'seqfile'   : open(self.raw_seq_file_name, "r"),
+#                          'primfile'  : open(primer_file_name, "r"),
+#                          'metafile'  : open(metadata_file_name, "r"),
+#                          'paramfile' : open(param_file_name, "r")
+#                          }
+                         
             # where to send it?
             vamps_upload_url = get_parm('vamps_data_post_url')
             # do we also send a qual file? if one was generated then we should send it
-            possible_qual_file_name = sequence_file_name_prefix + ".qual"
-            if os.path.exists(possible_qual_file_name):
-                vamps_upload_url = get_parm('vamps_data_post_url_with_qual_file')
-                post_params['qualfile'] = open(possible_qual_file_name,"r")
+#            possible_qual_file_name = sequence_file_name_prefix + ".qual"
+#            if os.path.exists(possible_qual_file_name):
+#                vamps_upload_url = get_parm('vamps_data_post_url_with_qual_file')
+ #               post_params['qualfile'] = open(possible_qual_file_name,"r")
             
             datagen, headers = encode.multipart_encode(post_params)
             # Create the Request object
@@ -953,7 +1029,10 @@ quality_file=
                 raise "Error uploading sequence files to VAMPS: " + response.msg
             # this response string is very important because if things were successful then it holds
             # the id of the vamps status record that we will need in our processing
-            response_str = response.read()
+            response_str = response.read().strip()
+            if len(response_str) > 12:
+                self.log_exception("Error: response_str from "+vamps_upload_url+" is incorrect; Perhaps there are extraneous print commands?")
+                raise
             self.log_debug("Successfully uploaded to VAMPS submission_detail: " + str(submission_detail.id) + " got response id: " + response_str)
             return response_str
         except:

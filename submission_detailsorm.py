@@ -28,7 +28,9 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
     ACTION_PROCESSING_COMPLETE = "processing_complete"
     
     
+    
     ID = "id"
+    VAMPS_USER = "vamps_user"
     PROJECT_ID = "project_id"
     SUBMISSION_ID = "submission_id"
     SAMPLE_ID = "sample_id"
@@ -37,6 +39,7 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
     VAMPS_PROJECT_NAME = "vamps_project_name"
     VAMPS_DATASET_NAME = "vamps_dataset_name"
     VAMPS_STATUS_RECORD_ID = "vamps_status_record_id"
+    SEQUENCE_FILE_URL = "sequence_file_url"
     NEXT_ACTION = "next_action"
     REGION = 'region'
     CURRENT_STATUS_MSG = "current_status_msg"
@@ -51,6 +54,7 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
     vamps_dataset_name = Column(String(64))    
     next_action = Column(String(64))    
     vamps_status_record_id = Column(Integer)
+    sequence_file_url = Column(String(512))
     region = Column(String(32))
     current_status_msg = Column(String(512))
 
@@ -74,19 +78,22 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
         pass
     
     def __repr__(self):
-        print "OOO: <SubmissionDetailsORM('%s','%s', '%s','%s','%s', '%s')>" % (self.id, self.submission_id, self.project_id, self.sample_id, self.library_id, self.sequenceset_id)
+        print "<SubmissionDetailsORM('%s','%s', '%s','%s','%s', '%s')>" % (self.id, self.submission_id, self.project_id, self.sample_id, self.library_id, self.sequenceset_id)
 
         return "<SubmissionDetailsORM('%s','%s', '%s','%s','%s', '%s')>" % (self.id, self.submission_id, self.project_id, self.sample_id, self.library_id, self.sequenceset_id)
     
     def get_VAMPS_submission_status_row(self, sess_obj):
         vamps_session = None
         session_to_use = None
+        mobedac_logger.debug("vamps_status_record_id "+str(self.vamps_status_record_id))
+        
         try:
             if False: #environment == 'test':
                 session_to_use = sess_obj
             else:
                 session_to_use = vampsSession()
             result_row = session_to_use.execute("SELECT status, status_message FROM vamps_upload_status where id=:id", {'id':self.vamps_status_record_id}).first()      
+            mobedac_logger.debug("SELECT status, status_message FROM vamps_upload_status where id=:id"+ self.vamps_status_record_id+ " and result: "+str(result_row))
             return result_row
         except:
             mobedac_logger.exception("submissionORM error retrieving vamps_upload_status with id: " + self.vamps_status_record_id)
@@ -156,6 +163,7 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
             mobedac_logger.exception("submissionORM error generating submission status message")
             msg = "There was an error retrieving the status of this submission"
             code = self.ERROR_STATUS
+        mobedac_logger.debug("status_code "+str(code)+ " current_status "+str(msg))
         return {"status_code" : code, "current_status" : msg}
         
         
@@ -168,7 +176,8 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
         self.set_attrs_from_json(json_obj, SubmissionDetailsORM.SAMPLE_ID)
         self.set_attrs_from_json(json_obj, SubmissionDetailsORM.LIBRARY_ID)
         self.set_attrs_from_json(json_obj, SubmissionDetailsORM.SEQUENCESET_ID)
-        self.set_attrs_from_json(json_obj, SubmissionDetailsORM.VAMPS_PROJECT_NAME)        
+        self.set_attrs_from_json(json_obj, SubmissionDetailsORM.VAMPS_PROJECT_NAME)
+        self.set_attrs_from_json(json_obj, SubmissionDetailsORM.SEQUENCE_FILE_URL)        
         return self
     
     def to_json(self, sess_obj):
@@ -184,6 +193,7 @@ class SubmissionDetailsORM(Base, BaseMoBEDAC):
         self.dump_attr(parts,self.vamps_dataset_name, self.VAMPS_DATASET_NAME)
         self.dump_attr(parts,self.next_action, self.NEXT_ACTION)
         self.dump_attr(parts,self.vamps_status_record_id, self.VAMPS_STATUS_RECORD_ID)
+        self.dump_attr(parts,self.sequence_file_url, self.SEQUENCE_FILE_URL)
         # get status
         status_hash = self.get_current_status()
         self.dump_attr(parts, status_hash['status_code'], "status_code")

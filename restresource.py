@@ -57,11 +57,13 @@ class RESTResource(object):
             return "There was an error attempting to service the GET request"
         
     def handle_POST(self, current_session, *vpath, **params):
-        """ Create of an object
+        """ Create an object
         """
         try:
             if self.orm_class is SubmissionORM:
                 submission_obj = self.orm_class({})
+                mobedac_logger.info("In handle_POST1:")
+                # AV here when get first send
                 json_obj = self.json_from_body()
                 submission_obj.from_json(True, json_obj, current_session)
                 submission_obj.initialize_for_processing(current_session)                
@@ -69,6 +71,7 @@ class RESTResource(object):
             else:
                 # create the object
                 new_obj = self.orm_class({})
+                mobedac_logger.info("In handle_POST2:")
                 json_obj = self.json_from_body()
                 new_obj.from_json(True, json_obj, current_session)
                 current_session.add(new_obj)

@@ -16,6 +16,7 @@ from rest_log import mobedac_logger
 class LibraryORM(Base, BaseMoBEDAC):
     __tablename__ = 'library'
     SEQUENCESET_ID_ARRAY = "sequence_sets"
+    SEQUENCE_FILE_NAME = "sequence_file_name"
     LIB_TYPE = "lib_type"
     LIB_INSERT_LEN = "lib_insert_len"
     SAMPLE = "sample"
@@ -40,6 +41,7 @@ class LibraryORM(Base, BaseMoBEDAC):
     region = Column(String(32))
     domain = Column(String(32))
     sequence_set_ids = Column(String(512))
+    
     sample = ""
     
     @classmethod
@@ -72,9 +74,12 @@ class LibraryORM(Base, BaseMoBEDAC):
         self.set_attrs_from_json(json_obj, self.SAMPLE)
 #        stage_name == 'upload'
         stage_name_list = json_obj[self.SEQUENCESET_ID_ARRAY]
+        #print "stage_name_list "+str(stage_name_list)
         sequence_file_names = []
-        sequence_file_names = [x['id'] for x in stage_name_list if x['stage_name'] == 'upload']
-
+        sequence_file_names = [x['file_name'] for x in stage_name_list if x['stage_name'] == 'upload']
+        sequence_file_ids = []
+        sequence_file_ids = [x['id'] for x in stage_name_list if x['stage_name'] == 'upload']
+        
 #        sequence_file_names = [x['file_name'] for x in stage_name_list if x['stage_name'] == 'upload']
 #        for dict in stage_name_list:
 #            if dict['stage_name'] == 'upload':
@@ -83,7 +88,8 @@ class LibraryORM(Base, BaseMoBEDAC):
 
 #        stage_name = json_obj[self.SEQUENCESET_ID_ARRAY]['stage_name']
 #        self.sequence_set_ids = ",".join(json_obj[self.SEQUENCESET_ID_ARRAY])  # just keep this as a string everywhere until being used
-        self.sequence_set_ids = ",".join([str(i) for i in sequence_file_names])
+        self.sequence_set_ids = ",".join([str(i) for i in sequence_file_ids])
+        self.sequence_set_names = ",".join([str(i) for i in sequence_file_names])
         mobedac_logger.info("library has sequence set ids: " + self.sequence_set_ids)
 #        print self.sequence_set_ids
         # now put the objects into the real child collection
@@ -99,6 +105,7 @@ class LibraryORM(Base, BaseMoBEDAC):
         self.dump_attr(parts,self.lib_insert_len, self.LIB_INSERT_LEN)
         self.dump_attr(parts,self.sample, self.SAMPLE)
         self.dump_attr(parts,json.loads(self.sequence_set_ids), self.SEQUENCESET_ID_ARRAY)
+        self.dump_attr(parts,self.sequence_set_names,self.SEQUENCE_FILE_NAME)
         print "UUU: self.sequence_set_ids = %s" % self.sequence_set_ids
         result =  ",".join(parts)
         print result
