@@ -49,7 +49,8 @@ class BaseMoBEDAC():
                 if response.status != httplib.OK:
                     raise ObjectRetrievalException("Unable to retrieve object: " + id + " from host: " + get_parm('mobedac_host') + " url: " + complete_url)
                 new_obj = cls({})
-                decoded_data = unidecode(data)
+                decoded_data = unidecode(data).strip()
+                mobedac_logger.info("complete_url: "+complete_url)
                 mobedac_logger.info("json string for object id_1: " + id + " json: " + decoded_data)
                 json_obj = json.loads(decoded_data)
                 #mobedac_logger.info("json obj: " + str(json_obj))

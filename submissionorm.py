@@ -115,7 +115,7 @@ class SubmissionORM(Base, BaseMoBEDAC):
         detail_objs = []
         for lib_id in libraries:
             try:
-                mobedac_logger.info("Retrieving remote library: " + str(lib_id));
+                mobedac_logger.info("\nRetrieving remote library: " + str(lib_id));
                 library_hash[lib_id] = curr_library = LibraryORM.getFromMOBEDAC(lib_id, None, sess_obj)
             except Exception as e:
                 # some kind of error 

@@ -131,7 +131,7 @@ class Submission_Processor (threading.Thread):
         processing_dir = self.get_submission_processing_dir(submission)
         if os.path.exists(processing_dir) == False:
             os.mkdir(processing_dir)
-        self.log_debug("processing_dir "+processing_dir)
+        #self.log_debug("processing_dir "+processing_dir)
         return processing_dir
 
     def create_submission_detail_processing_dir(self, submission, submissiondetail):
@@ -153,21 +153,21 @@ class Submission_Processor (threading.Thread):
                 if self.exitFlag:
                     return;
                 # find all submission_details objects that are want to have their data downloaded from MOBEDAC and processed
-                self.log_debug("detail-1: ")
+                self.log_debug("detail-1: ACTION_DOWNLOAD from MOBEDAC")
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_DOWNLOAD)
                 if self.exitFlag:
                     return;
-                self.log_debug("detail-2: ")
+                self.log_debug("detail-2: ACTION_VAMPS_UPLOAD: LOAD SEQS")
                 # find all submission_details objects that are want to uploaded to VAMPS for processing
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_VAMPS_UPLOAD)
                 if self.exitFlag:
                     return;
-                self.log_debug("detail-3: ")
+                self.log_debug("detail-3: ACTION_GAST")
                 # find all submission_details objects that are want to be GASTed by VAMPS
                 self.perform_action_on_submissions(SubmissionDetailsORM.ACTION_GAST)
                 if self.exitFlag:
                     return;
-                self.log_debug("detail-4: ")
+                self.log_debug("detail-4: return_results_to_mobedac()")
                 # now return the answers to MOBEDAC
                 self.return_results_to_mobedac()
                 if self.exitFlag:
@@ -186,12 +186,11 @@ class Submission_Processor (threading.Thread):
             # and each value is an array of detail objects and the detail's next_action is the 'action' input parm
             details_hashed_by_submission_id = {}
             for detail in self.sess_obj.query(SubmissionDetailsORM).filter(SubmissionDetailsORM.next_action == action).all():
-                self.log_debug("detail: "+str(detail))
+                #self.log_debug("detail: "+str(detail))
                 self.accumulate_by_key(details_hashed_by_submission_id, detail.submission_id, detail)
                 
             # loop over the dictionary: key is submission id and the value is an array of detail objects
             for submission_id, detail_array in details_hashed_by_submission_id.items():
-                self.log_debug(str(submission_id)+' - '+str(detail_array))
                 #self.log_debug("submission_id, detail_array: "+str(submission_id)+" -- "+str(detail_array))
                 # get the submission object from the db
                 submission = self.sess_obj.query(SubmissionORM).filter(SubmissionORM.id == submission_id).one()
@@ -277,7 +276,7 @@ class Submission_Processor (threading.Thread):
                 project_count = len(unique_project_name_dict)
                 # get the Submission object from the db
                 submission = SubmissionORM.get_instance(key, self.sess_obj)
-                taxonomy_table_json = self.get_taxonomy_table(project_count, sampleOrderNames, submission.user, 'family')
+                taxonomy_table_json = self.get_taxonomy_table(project_count, sampleOrderNames, submission.vamps_user, 'family')
                 if taxonomy_table_json == None:
                     self.log_debug("Didn't get any taxonomy returned from VAMPS for sampleOrderNames: " + str(sampleOrderNames))
                     continue
@@ -306,7 +305,10 @@ class Submission_Processor (threading.Thread):
     # POST the analysis results back to MoBEDAC
     # don't have the analysis links yet. 
     def send_to_mobedac(self, submission, library_ids, details_by_library_id, taxonomy_table_json):
-        analysis_links = self.get_analysis_links(submission.user, details_by_library_id)
+        from unidecode import unidecode
+        #self.log_debug("JSON TAX TABLE: "+unidecode(taxonomy_table_json))
+        
+        analysis_links = self.get_analysis_links(submission.vamps_user, details_by_library_id)
         mobedac_results_url = get_parm('mobedac_results_url')
         results_dict = {
                         "auth" : get_parm("mobedac_auth_key"),
@@ -319,6 +321,8 @@ class Submission_Processor (threading.Thread):
         try:  
             # send it
             json_str = json.dumps(results_dict)
+            #self.log_debug("json_str "+json_str)
+            
             # let's try to log this json into the processing dir
             # we are writing the json return data to a file in our processing dir just for safe keeping
             open(os.path.join(self.get_submission_processing_dir(submission),self.MOBEDAC_RESULTS_FILE_NAME), "w").write(json_str)
@@ -343,7 +347,8 @@ class Submission_Processor (threading.Thread):
         values = {'sampleOrder' : ",".join(projectDatasetNames),
                   'userProjects' : project_count,
                   'user' : user,
-                  'taxonomicRank' : rank}                
+                  'taxonomicRank' : rank}
+        self.log_debug("sampleOrder "+",".join(projectDatasetNames)+" userProjects "+str(project_count)+" user "+user+" taxonomicRank "+rank)
         data = urllib.urlencode(values)
         response = None
         try:
@@ -371,7 +376,7 @@ class Submission_Processor (threading.Thread):
         try:
             # so we can have a collection of submissions to gast
             # if there are more than 1 details in a project then we want to gast them as a group
-            # and so they all have to be at the state of TRIM_SUCCESS else we can't gast yet
+            # and so they all have to be at the state of LOAD_SUCCESS else we can't gast yet
             details_by_project_name = {}
             for detail in submissiondetail_array:                          
                 status_row = detail.get_VAMPS_submission_status_row(self.sess_obj)
@@ -381,38 +386,41 @@ class Submission_Processor (threading.Thread):
 #                    raise
 #                    raise "Error preparing for GAST no vamps_upload_status record found for submission_detail: " + str(detail.id) + " vamps_status_id: " + str(submission.vamps_status_record_id)
                 if status_row[0] != self.VAMPS_LOAD_SUCCESS:
-                    self.log_debug("Can't GAST submissiondetail: %s  yet, VAMPS status is: %s" % (str(detail.id), status_row[0]))
+                    self.log_debug("Can't GAST submissiondetail %s  yet, VAMPS status is: %s" % (str(detail.id), status_row[0]))
                     return
                 #gather them by project name
                 self.accumulate_by_key(details_by_project_name, detail.vamps_project_name, detail)
             
             # write out the metadata
-            self.writeMetadata(submission, submissiondetail_array)
+#            self.writeMetadata(submission, submissiondetail_array)
 
             # if we land here then all submission detail objects in this project were uploaded and trimmed successfully and are waiting to be GASTed
             # need to GAST them by project
             # loop over all details by project
             for project_name, details in details_by_project_name.items():
                 # can use just a single detail object because we GAST all the datasets in the project
-                detail =  details[0]
-                values = {'project' : project_name,
-                          'new_source' : detail.region, 
-                          'gast_ok' : '1',
-                          'run_number' : str([d.vamps_status_record_id for d in details])  # this is a hack for testing purposes
-                          }
-                
-                data = urllib.urlencode(values)
-                # Create the Request object
-                request = urllib2.Request(self.vamps_gast_url, data)
-                # Actually do the request, and get the response
-                # POST the GAST request to VAMPS
-                response = urllib2.urlopen(request)
-                if response.code != 200:
-                    raise "Error starting GAST processing in VAMPS: " + response.msg
-                # must have submitted ok so mark them all
-                for detail in submissiondetail_array:                          
-                    detail.next_action = SubmissionDetailsORM.ACTION_POST_RESULTS_TO_MOBEDAC
-                self.sess_obj.commit()
+                # BUT since the datasets are in separate directories:
+                run_numbers = [d.vamps_status_record_id for d in details]  # this is a hack for testing purposes
+                for run_number in run_numbers:
+                    detail =  details[0]
+                    values = {'project' : project_name,
+                              'user' : submission.vamps_user,
+                              'gast_ok' : '1',
+                              'run_number' : str(run_number) 
+                              }
+                    self.log_debug("GAST: project "+project_name+" user: "+submission.vamps_user+" run_number: "+str(run_number))
+                    data = urllib.urlencode(values)
+                    # Create the Request object
+                    request = urllib2.Request(self.vamps_gast_url, data)
+                    # Actually do the request, and get the response
+                    # POST the GAST request to VAMPS
+                    response = urllib2.urlopen(request)
+                    if response.code != 200:
+                        raise "Error starting GAST processing in VAMPS: " + response.msg
+                    # must have submitted ok so mark them all
+                    for detail in submissiondetail_array:                          
+                        detail.next_action = SubmissionDetailsORM.ACTION_POST_RESULTS_TO_MOBEDAC
+                    self.sess_obj.commit()
             self.log_debug("Posted GAST for submissiondetail: " + str(detail.id) + " project: " + detail.vamps_project_name + " vamps status id: " + str(detail.vamps_status_record_id))
         except:
             self.log_exception("Some kind of error preparing to or actually calling VAMPS to GAST")
@@ -781,7 +789,7 @@ class Submission_Processor (threading.Thread):
             #
             # this routine will create the primer, key, param files and then submit      
             submissiondetail.vamps_status_record_id = self.create_files_and_upload(submission, submissiondetail, project, library)
-            mobedac_logger.debug("vamps_status_record_id",str(submissiondetail.vamps_status_record_id))
+            #mobedac_logger.debug("vamps_status_record_id",str(submissiondetail.vamps_status_record_id))
             # if all went ok then mark this as completed
             submissiondetail.next_action = SubmissionDetailsORM.ACTION_GAST
             # save it
@@ -1029,9 +1037,9 @@ quality_file=
                 raise "Error uploading sequence files to VAMPS: " + response.msg
             # this response string is very important because if things were successful then it holds
             # the id of the vamps status record that we will need in our processing
-            response_str = response.read().strip()
+            response_str = str(response.read().strip())
             if len(response_str) > 12:
-                self.log_exception("Error: response_str from "+vamps_upload_url+" is incorrect; Perhaps there are extraneous print commands?")
+                self.log_exception("Error: response_str from "+vamps_upload_url+" is incorrect; Perhaps there are extraneous print commands in php file?")
                 raise
             self.log_debug("Successfully uploaded to VAMPS submission_detail: " + str(submission_detail.id) + " got response id: " + response_str)
             return response_str
